@@ -1,0 +1,25 @@
+# ----------------------------------------------------------
+# Compiler configuration
+# ----------------------------------------------------------
+CC = /opt/local/bin/mpicxx-openmpi-mp
+CXX = $(CC)
+CFLAGS = -std=c++11 -Wall -O3
+CLIBS = -lm
+AR = ar rcu
+RANLIB = ranlib 
+
+
+# ----------------------------------------------------------
+# Optional dependencies (set to 1 if available)
+# ----------------------------------------------------------
+HAVE_MPI = 1
+HAVE_HDF5 = 1
+HAVE_FFTW = 1
+HAVE_RNPL = 0
+
+
+# ----------------------------------------------------------
+# System library directories
+# ----------------------------------------------------------
+H5I = -I/anaconda/include
+H5L = -L/anaconda/lib -lhdf5

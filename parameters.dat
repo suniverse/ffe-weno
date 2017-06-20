@@ -1,0 +1,10 @@
+GridDimensions         = 1 1 512
+NumberOfGhostZones     = 3
+
+CFLSafetyNumber        = 0.5
+DataDumpInterval       = 0.1
+
+StopTime               = 0.5
+#StopCycle             = 1
+
+ReconstructionMethod   = 2  // 1 for PLM, 2 for WENO 5
