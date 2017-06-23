@@ -38,11 +38,15 @@ Solver::Solver(UserParameters userParameters)
 	// right flux
 	//FluxR  = Array(N[0], N[1], N[2],6);
 	// Godunov flux
-	FluxG  = Array(N[0], N[1], N[2],6);
+	FluxG     = Array(N[0], N[1], N[2],6);
 	// change of the primitive field
-	DeltaP = Array(N[0], N[1], N[2],6);
+	DeltaP    = Array(N[0], N[1], N[2],6);
 	// auxillary field to store primitive varible (B,E)
-	P0     = Array(N[0], N[1], N[2],6);
+	P0        = Array(N[0], N[1], N[2],6);
+	// auxillary field to clean divB
+	Psi    	  = Array(N[0], N[1], N[2]);
+	Psi0      = Array(N[0], N[1], N[2]);
+	DeltaPsi  = Array(N[0], N[1], N[2]);
 
 	//reconstruct = Reconstruction();// implied!
 	//reconstruct = Reconstruction(arg1, arg2);
@@ -51,6 +55,7 @@ Solver::Solver(UserParameters userParameters)
 void Solver::ComputeDeltaP(const Array& P)
 {	
 	AddSourceTerm(P);
+	DednerDamp(P);
 
 	if ( N[0] > 1)
 	{
@@ -110,6 +115,57 @@ void Solver::AddSourceTerm(const Array& P)
 				DeltaP(i,j,k,3) = -rho / B2 * ( P(i,j,k,4)*P(i,j,k,2) - P(i,j,k,5)*P(i,j,k,1));
 				DeltaP(i,j,k,4) = -rho / B2 * ( P(i,j,k,5)*P(i,j,k,0) - P(i,j,k,3)*P(i,j,k,2));
 				DeltaP(i,j,k,5) = -rho / B2 * ( P(i,j,k,3)*P(i,j,k,1) - P(i,j,k,4)*P(i,j,k,0));
+			}
+		}
+	}
+}
+
+void Solver::DednerDamp(const Array& P)
+{	
+	double ch2 = 1.0;
+	double tau = 20*dt;
+
+	double divB;
+
+	// compute divB
+	for (int i = StartIndex[0]; i < EndIndex[0]; ++i)
+	{
+		for (int j = StartIndex[1]; j < EndIndex[1]; ++j)
+		{
+			for (int k = StartIndex[2]; k < EndIndex[2]; ++k)
+			{
+				// Calculate divB
+				divB = 0;
+				if ( N[0] > 1 )
+				{
+					divB += ((P(i-2,j,k,0)-P(i+2,j,k,0))/12. - (P(i-1,j,k,0)-P(i+1,j,k,0))*2./3.)/dx[0];
+					//rho +=  - (P(i-1,j,k,3)-P(i+1,j,k,3))/2./dx[0];
+				}	
+				if ( N[1] > 1 )
+				{
+					divB += ((P(i,j-2,k,1)-P(i,j+2,k,1))/12. - (P(i,j-1,k,1)-P(i,j+1,k,1))*2./3.)/dx[1];
+				}
+				if ( N[2] > 1 )
+				{
+					divB += ((P(i,j,k-2,2)-P(i,j,k+2,2))/12. - (P(i,j,k-1,2)-P(i,j,k+1,2))*2./3.)/dx[2];
+				}	
+
+				DeltaPsi(i,j,k) = -ch2*divB - Psi(i,j,k)/tau;
+
+				if ( N[0] > 1 )
+				{
+					DeltaP(i,j,k,0) = -((Psi(i-2,j,k)-Psi(i+2,j,k))/12. - (Psi(i-1,j,k)-Psi(i+1,j,k))*2./3.)/dx[0];
+					//rho +=  - (P(i-1,j,k,3)-P(i+1,j,k,3))/2./dx[0];
+				}	
+				if ( N[1] > 1 )
+				{
+					DeltaP(i,j,k,1) = -((Psi(i,j-2,k)-Psi(i,j+2,k))/12. - (Psi(i,j-1,k)-Psi(i,j+1,k))*2./3.)/dx[1];
+				}
+				if ( N[2] > 1 )
+				{
+					DeltaP(i,j,k,2) = -((Psi(i,j,k-2)-Psi(i,j,k+2))/12. - (Psi(i,j,k-1)-Psi(i,j,k+1))*2./3.)/dx[2];
+				}	
+
 			}
 		}
 	}
@@ -352,23 +408,45 @@ void Solver::ShrinkE( Array& P)
 void Solver::Advance(Array& P)
 { 
 	//TVD-rk3 evolution
-	Cache(P);
+	Cache(P, Psi);
+
 
 	// 1st step
-	//Transport(P);
-	TVDstep(P, 0.0, 1.0);
+	ComputeDeltaP(P);
+
+	TVDstep(P, P0, DeltaP, 0.0, 1.0);
+	TVDstep(Psi, Psi0, DeltaPsi, 0.0, 1.0);
+
+	// add J_parallel by removing EdotB
+	CleanEdotB(P);
+
 
 	SetBoundaryValue(P);
 
 	// 2nd step
-	TVDstep(P, 3./4., 1./4.);
+	ComputeDeltaP(P);
+
+	TVDstep(P, P0, DeltaP, 3./4., 1./4.);
+	TVDstep(Psi, Psi0, DeltaPsi, 3./4., 1./4.);
+
+	// add J_parallel by removing EdotB
+	CleanEdotB(P);
+
+
 	//TVDstep(P, 1./2., 1./2.);
 
 
 	SetBoundaryValue(P);
 
 	// 3rd step
-	TVDstep(P, 1./3., 2./3.);
+	ComputeDeltaP(P);
+
+	TVDstep(P, P0, DeltaP, 1./3., 2./3.);
+	TVDstep(Psi, Psi0, DeltaPsi, 1./3., 2./3.);
+
+	// add J_parallel by removing EdotB
+	CleanEdotB(P);
+
 
 	ShrinkE(P);
 
@@ -376,24 +454,19 @@ void Solver::Advance(Array& P)
 
 }
 
-void Solver::Cache(const Array& P)
+void Solver::Cache(const Array& P, const Array& Psi)
 {
 	// copy B and E to auxillary variables.
 	P0 = P;
+	Psi0 = Psi;
 }
 
-void Solver::TVDstep(Array& P, double alpha, double beta)
+void Solver::TVDstep(Array& P, const Array& P0, const Array& DeltaP, double alpha, double beta)
 {
-	ComputeDeltaP(P);
-
 	for (int n = 0; n < P.size(); ++n)
 	{
 		P[n] = alpha * P0[n] + beta * (P[n] + dt * DeltaP[n]);
 	}
-
-	// add J_parallel by removing EdotB
-	CleanEdotB(P);
-
 
 }
 

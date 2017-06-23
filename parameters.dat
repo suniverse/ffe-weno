@@ -1,4 +1,4 @@
-GridDimensions         = 1 1 512
+GridDimensions         = 1 64 64
 NumberOfGhostZones     = 3
 
 CFLSafetyNumber        = 0.5

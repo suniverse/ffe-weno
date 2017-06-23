@@ -30,14 +30,16 @@ int main()
 
 	Array& P = solution.GetPField();
 
+	solver.SetBoundaryValue(P);
+
 	solution.ComputeTotalEnergy();
 	solution.ComputeTotalEdotB();
-
-	printf("total energy %f \n",solution.TotalEnergy);
-	printf("total EdotB %f \n",solution.TotalEdotB);
+	solution.ComputeMaxdivB();
 
 
-	solver.SetBoundaryValue(P);
+	printf("Initial Total Energy %f \n",solution.TotalEnergy);
+	printf("Initial Total EdotB %f \n",solution.TotalEdotB);
+	printf("Initial Max divB %.12f \n",solution.MaxdivB);
 
 	Array& B = solution.GetBField();
 	Array& E = solution.GetEField();
@@ -46,21 +48,20 @@ int main()
 	simulationControl.OutputData(B,E);
 	simulationControl.UpdateCheckPoint();
 
-
 	while(simulationControl.ShouldContinue())
 		{
 			double dt = simulationControl.Getdt();
-			//printf("time %f %f %d\n", simulationControl.SimTime, dt, simulationControl.Cycle);
+			printf("Cycle = %d, Time = %f, dt = %f \n", simulationControl.Cycle, simulationControl.SimTime, dt);
 
 			solver.Setdt(dt);
+
 			solver.Advance(P);
-			//printf("output %d \n", simulationControl.ShouldOutput());
 			
 			simulationControl.UpdateTimeandCycle(dt);
 
 			if(simulationControl.ShouldOutput())
 			{
-				//printf("output \n");
+				printf("Output Data # %d \n", simulationControl.OutputCheckPoint);
 				B = solution.GetBField();
 				E = solution.GetEField();
 
@@ -68,7 +69,18 @@ int main()
 				simulationControl.UpdateCheckPoint();
 
 				simulationControl.UpdateNextDumpTime();
+				
+				solution.ComputeTotalEnergy();
+				solution.ComputeTotalEdotB();
+				solution.ComputeMaxdivB();
+
+
+				printf("Total Energy %f \n",solution.TotalEnergy);
+				printf("Total EdotB %f \n",solution.TotalEdotB);
+				printf("Max divB %.12f \n",solution.MaxdivB);
+
 			}
+
 		}
 
 	B = solution.GetBField();
@@ -77,9 +89,13 @@ int main()
 	simulationControl.OutputData(B,E);
 	solution.ComputeTotalEnergy();
 	solution.ComputeTotalEdotB();
+	solution.ComputeMaxdivB();
 
-	printf("total energy %f \n",solution.TotalEnergy);
-	printf("total EdotB %f \n",solution.TotalEdotB);
+
+	printf("Final Total Energy %f \n",solution.TotalEnergy);
+	printf("Final Total EdotB %f \n",solution.TotalEdotB);
+	printf("Final Max divB %.12f \n",solution.MaxdivB);
+
 
 	return 0;
 }

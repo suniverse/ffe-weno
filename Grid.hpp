@@ -54,8 +54,12 @@ public:
 
 	double TotalEnergy;
 	double TotalEdotB;
+	double MaxdivB;
+	
 	void ComputeTotalEnergy();
 	void ComputeTotalEdotB();
+	void ComputeMaxdivB();
+
 
 	void InitialData();
 
@@ -75,6 +79,10 @@ private:
 	Cow::Array FluxG;
 	Cow::Array P0;
 	Cow::Array DeltaP;
+	Cow::Array Psi;
+	Cow::Array Psi0;
+
+	Cow::Array DeltaPsi;
 
 	// Number of grids in each direction (including ghost zone)
 	int N[3] = {1,1,1};
@@ -107,12 +115,13 @@ public:
 	void CleanEdotB(Cow::Array& P);
 
 	void Advance(Cow::Array& P);
-	void Cache(const Cow::Array& P);
-	void TVDstep(Cow::Array& P, double alpha, double beta);
+	void Cache(const Cow::Array& P, const Cow::Array& Psi);
+	void TVDstep(Cow::Array& P, const Cow::Array& P0, const Cow::Array& DeltaP, double alpha, double beta);
 	void SetBoundaryValue(Cow::Array& P);
 	void Setdt(double dt);
 	void ShrinkE(Cow::Array& P);
 
+	void DednerDamp(const Cow::Array& P);
 };
 
 class SimulationControl

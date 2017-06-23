@@ -163,9 +163,38 @@ void SolutionData::ComputeTotalEdotB()
 	}// end loop over i
 }
 
+void SolutionData::ComputeMaxdivB()
+{
+	MaxdivB = 0;
+	for (int i = StartIndex[0]; i < EndIndex[0]; ++i)
+	{
+		for (int j = StartIndex[1]; j < EndIndex[1]; ++j)
+		{
+			for (int k = StartIndex[2]; k < EndIndex[2]; ++k)
+			{
+				double divB = 0;
+				if ( N[0] > 1 )
+				{
+					divB += ((PField(i-2,j,k,0)-PField(i+2,j,k,0))/12. - (PField(i-1,j,k,0)-PField(i+1,j,k,0))*2./3.)/dx[0];
+				}	
+				if ( N[1] > 1 )
+				{
+					divB += ((PField(i,j-2,k,1)-PField(i,j+2,k,1))/12. - (PField(i,j-1,k,1)-PField(i,j+1,k,1))*2./3.)/dx[1];
+				}
+				if ( N[2] > 1 )
+				{
+					divB += ((PField(i,j,k-2,2)-PField(i,j,k+2,2))/12. - (PField(i,j,k-1,2)-PField(i,j,k+1,2))*2./3.)/dx[2];
+				}	
+				MaxdivB = fmax(divB, MaxdivB);
+			} // end loop over k
+		}// end loop over j
+	}// end loop over i
+}
+
+
 void SolutionData::InitialData()
 {
-	double kvec[3] = {0, 0, 2*3.1415927};
+	double kvec[3] = {0, 2*3.1415927, 2*3.1415927};
 
 	for (int i = 0; i < Nint[0]; ++i)
 	{
@@ -192,14 +221,14 @@ void SolutionData::InitialData()
 				EField(i,j,k,0) = -BField(i,j,k,2);*/
 
 				// Fast Wave
-				BField(i,j,k,0) = 0.1*cos(kx);
-				BField(i,j,k,2) = 1;
-				EField(i,j,k,1) = -BField(i,j,k,0);
-
-				// Alfven Wave
 				/*BField(i,j,k,0) = 0.1*cos(kx);
 				BField(i,j,k,2) = 1;
 				EField(i,j,k,1) = -BField(i,j,k,0);*/
+
+				// Alfven Wave
+				BField(i,j,k,0) = 0.1*cos(kx);
+				BField(i,j,k,2) = 1;
+				EField(i,j,k,1) = -BField(i,j,k,0);
 
 				//Current Sheet
 				/*BField(i,j,k,0) = 1;
