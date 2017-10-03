@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <array>
 #include <vector>
+#include <functional>
 
 
 
@@ -13,6 +14,8 @@ namespace Cow
     class Array;
     class HeapAllocation;
     class RegionIterator;
+
+
 
 
     /**
@@ -26,6 +29,11 @@ namespace Cow
         Create a null allocation.
         */
         HeapAllocation();
+
+        /**
+        Destructor.
+        */
+        ~HeapAllocation();
 
         /**
         Allocate a heap block of the given size. Bytes are *not* zero-
@@ -49,14 +57,14 @@ namespace Cow
         HeapAllocation (HeapAllocation&& other);
 
         /**
-        Destructor.
-        */
-        ~HeapAllocation();
-
-        /**
         Assign this block the contents of another (deep copy).
         */
         HeapAllocation& operator= (const HeapAllocation& other);
+
+        /**
+        Move-assign this block the contents of another (steal data from other).
+        */
+        HeapAllocation& operator= (HeapAllocation&& other);
 
         /**
         Return the number of bytes in use.
@@ -98,10 +106,17 @@ namespace Cow
             return static_cast<T*>(allocation) + numberOfBytes / sizeof(T);
         }
 
+        template <class T> const T* end() const
+        {
+            return static_cast<const T*>(allocation) + numberOfBytes / sizeof(T);
+        }
+
     private:
         void* allocation;
         std::size_t numberOfBytes;
     };
+
+
 
 
     /**
@@ -110,10 +125,64 @@ namespace Cow
     using Shape = std::array<int, 5>;
 
 
+
+
     /**
     A type to represent a multi-dimensional index (i, j, k, m, n).
     */
     using Index = std::array<int, 5>;
+
+
+
+
+    /**
+    A helper class for manipulating a particular convention for 3D Array
+    shapes. Axes 0, 1, and 2 are spatial, axis 3 is for scalar or vector
+    components, and axis 4 (whose size is caled 'rank') is used to refer
+    to indexed mesh locations (e.g. faces or edges) in a structured mesh.
+    */
+    class Shape3D
+    {
+    public:
+        Shape3D();
+        Shape3D (int n1, int n2, int n3);
+        Shape3D (Shape S);
+        Shape3D (const Array& A);
+        operator Shape() const;
+        const int &operator[] (int index) const;
+        int &operator[] (int index);
+        Shape3D operator*(int x) const;
+        Shape3D operator/(int x) const;
+        /** Shape with spatial axes reduced. */
+        Shape3D reduced (int delta=1) const;
+        /** Shape with spatial axes reduced by first 3 elements of delta. */
+        Shape3D reduced (Shape delta) const;
+        /** Shape with the given axis reduced by delta. */
+        Shape3D reduced (int axis, int delta) const;
+        /** Shape with the given axis increased by delta. */
+        Shape3D increased (Shape delta) const;
+        /** Shape with spatial axes increased by first 3 elements of delta. */
+        Shape3D increased (int delta=1) const;
+        /** Shape with the given axis increased by delta. */
+        Shape3D increased (int axis, int delta) const;
+        /** Shape with axis 3 replaced. */
+        Shape3D withComponents (int numComponents) const;
+        /** Shape with axis 4 replaced. */
+        Shape3D withRank (int rank) const;
+        /** True if other is <= in size to this on each axis. */
+        bool contains (Shape3D other) const;
+
+        /**
+        A utility function which deploys a function of i, j, k over the given
+        shape. This is essentially short-hand for writing a triple for-loop.
+        */
+        void deploy (std::function<void (int i, int j, int k)> function) const;
+
+    private:
+        Shape S;
+    };
+
+
 
 
     /**
@@ -187,24 +256,68 @@ namespace Cow
 
         /**
         Construct a default region, which is relative and refers to the entire
+        extent of its target. Alias for "whole".
+        */
+        Region (Shape shape);
+
+        /**
+        Construct a default region, which is relative and refers to the entire
         extent of its target.
         */
         Region();
 
-        /** Return true if the upper bound is relative to end. */
+        /**
+        Return a new region, with the upper, lower, and stride on the given
+        axis replaced.
+        */
+        Region withRange (int axis, int lower, int upper, int stride=1) const;
+
+        /**
+        Return a new region, with the lower bound on the given axis replaced.
+        */
+        Region withLower (int axis, int newLower) const;
+
+        /**
+        Return a new region, with the upper bound on the given axis replaced.
+        */
+        Region withUpper (int axis, int newUpper) const;
+
+        /**
+        Return a strided version of this region, along the given axis.
+        */
+        Region withStride (int axis, int newStride) const;
+
+        /**
+        Return true if the upper bound is relative to end.
+        */
         bool isRelative() const;
 
-        /** Check if this region is empty. */
+        /**
+        Check if this region is empty.
+        */
         bool isEmpty() const;
 
-        /** Check if two regions are identical */
+        /**
+        Check if two regions are identical.
+        */
         bool operator== (const Region& other) const;
+
+        /**
+        Return the total number of elements in the region, after strides
+        accounted for. The region is assumed to be absolute.
+        */
+        int size() const;
 
         /**
         Return the number of elements along each axis, after strides are
         accounted for. The region is assumed to be absolute.
         */
         Shape shape() const;
+
+        /**
+        Return a 3D version of shape().
+        */
+        Shape3D shape3D() const;
 
         /**
         Return shape(), but with trailing axes of length 1 removed.
@@ -277,21 +390,16 @@ namespace Cow
         */
         Array& operator= (const Array& other);
 
+        /**
+        Move-assignment operator.
+        */
+        Array& operator= (Array&& other);
+
         /** Get a reference to the underlying buffer. */
         HeapAllocation& getAllocation() { return memory; }
 
         /** Get a const reference to the underlying buffer. */
         const HeapAllocation& getAllocation() const { return memory; }
-
-        /**
-        Set the memory layout to either 'C' or 'F' (C or Fortran) type
-        ordering. With 'C', the last index is contiguous in memory, while with
-        'F' it is the first index that is contiguous. This function does not
-        move any data in the internal buffer, so if the array is already
-        populated, then its contents will appear transposed in any subsequent
-        indexing.
-        */
-        void setOrdering (char orderingMode);
 
         /**
         Return the total number of doubles in this array.
@@ -309,9 +417,14 @@ namespace Cow
         Shape shape() const;
 
         /**
-        Return the memory layout type, 'C' or 'F'.
+        Return a 3D version of shape().
         */
-        char getOrdering() const;
+        Shape3D shape3D() const;
+
+        /**
+        Return the strides in memory along each axis.
+        */
+        Shape strides() const;
 
         /**
         Return the shape of this array as a vector, with trailing axes that
@@ -339,9 +452,24 @@ namespace Cow
 
         /**
         Insert all of the source array into the given region of this array.
+        The region argument may be omitted, in which case this array's data is
+        replaced completely. This operation may improve efficiency relative to
+        the assignment operator, since this array's HeapAllocation is reused.
         */
-        void insert (const Array& source, Region R);
+        void insert (const Array& source, Region R=Region());
 
+        /**
+        Copy data from the source region of A into the target region of this
+        array.
+        */
+        void copyFrom (const Array& A, Region targetRegion, Region sourceRegion=Region());
+
+        /**
+        Change the Array's shape, without modifying its data layout. The new
+        size must equal the old size.
+        */
+        void reshape (int n1, int n2=1, int n3=1, int n4=1, int n5=1);
+        
         /**
         Return a trivial iterator to the beginning of the array.
         */
@@ -351,6 +479,11 @@ namespace Cow
         Return a trivial iterator to the end of the array.
         */
         double* end() { return memory.end<double>(); }
+
+        /**
+        Return a trivial iterator to the end of the array.
+        */
+        const double* end() const { return memory.end<double>(); }
 
         /** Retrieve a value by linear index. */
         double& operator[] (int index);
@@ -365,6 +498,8 @@ namespace Cow
         */
         Reference operator[] (Region R);
 
+        operator Reference() { return this->operator[] (Region()); }
+
         double& operator() (int i);
         double& operator() (int i, int j);
         double& operator() (int i, int j, int k);
@@ -377,8 +512,27 @@ namespace Cow
         const double& operator() (int i, int j, int k, int m) const;
         const double& operator() (int i, int j, int k, int m, int n) const;
 
+        /**
+        Return an array which results from applying the given callback
+        function element-wise.
+        */
+        Array map (std::function<double (double)> function) const;
+
         static Shape shapeFromVector (std::vector<int> shapeVector);
+
         static std::vector<int> vectorFromShape (Shape shape);
+
+        static bool isBoundsCheckDisabled();
+        
+        /**
+        A utility function which deploys a function over the first three axes
+        of the given shape. This is essentially short-hand for writing a
+        triple for-loop.
+
+        \deprecated
+        move to Shape3D class
+        */
+        static void deploy (Shape shape, std::function<void (int i, int j, int k)> function);
 
         class Reference
         {
@@ -402,12 +556,18 @@ namespace Cow
             /**
             Return the referenced array.
             */
+            Array& getArray();
             const Array& getArray() const;
 
             /**
             Return the region of the referenced array.
             */
             const Region& getRegion() const;
+
+            /**
+            Convenience for shape()[axis].
+            */
+            int size (int axis) const;
 
             /**
             Return the referenced regions's shape, short for ref.getRegion().shape().
@@ -483,10 +643,9 @@ namespace Cow
 
     private:
         /** @internal */
-        static void copyRegion (Array& dst, const Array& src, Region R, char mode);
-
-        char ordering;
+        static void copyRegion (Array& dst, const Array& src, Region source, Region target);
         int n1, n2, n3, n4, n5;
+        Shape S;
         HeapAllocation memory;
     };
 };

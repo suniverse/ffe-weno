@@ -1,6 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
+
+#define COW_DEBUG_USE_CASSERT
 #include "Array.hpp"
 #include "MPI.hpp"
 #include "HDF5.hpp"
@@ -139,6 +141,24 @@ void testHdf5()
         assert (std::string (testFile.readVariant ("str")) == std::string (strvar));
         assert (            (testFile.readVariant ("str").getType() == 's'));
     }
+
+    {
+        auto A = Array (8, 8, 8);
+        auto dtype = H5::DataType::nativeDouble();
+        auto plist = H5::PropertyList::DataSetCreate().setChunk ({4, 4, 4});
+
+        auto testFile = H5::File ("test.h5", "w");
+        testFile.createDataSet ("chunked_array", A.getShapeVector(), dtype, plist);
+    }
+
+    {
+        auto testFile = H5::File ("test.h5", "w");
+        auto int_dset = testFile.createDataSet ("int_dataset", std::vector<int> (1, 10), H5::DataType::nativeInt());
+        auto dbl_dset = testFile.createDataSet ("dbl_dataset", std::vector<int> (1, 10), H5::DataType::nativeDouble());
+
+        assert (int_dset.getType().bytes() == sizeof (int));
+        assert (dbl_dset.getType().bytes() == sizeof (double));
+    }
 }
 
 
@@ -169,22 +189,38 @@ void testIter()
 
 void testSlicing()
 {
-    auto source = Array ( 1, 12, 12);
-    auto target = Array (12, 12, 12);
-    auto R = Region();
+    {
+        auto source = Array ( 1, 12, 12);
+        auto target = Array (12, 12, 12);
+        auto R = Region();
 
-    R.lower[0] = 6;
-    R.upper[0] = 7;
+        R.lower[0] = 6;
+        R.upper[0] = 7;
 
-    target.insert (source, R);
-    target[R] = source;
+        target.insert (source, R);
+        target[R] = source;
+    }
+
+    {
+        auto A = Array (2, 4, 6, 3, 3);
+        auto G = Array (A.shape());
+        auto R = Region().withStride (3, A.size(3)).withStride (4, A.size (4));
+
+        const double* last = A.begin() - 9;
+
+        for (const auto& it : A[R])
+        {
+            assert (&it - last == 9);
+            last = &it;
+        }
+    }
 }
 
 
 int main (int argc, const char* argv[])
 {
     MpiSession mpi;
-    std::set_terminate (Cow::terminateWithBacktrace);
+    // std::set_terminate (Cow::terminateWithBacktrace);
 
     testHeap();
     testArray();

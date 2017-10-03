@@ -3,13 +3,10 @@
 #include <cstring>
 #include "Array.hpp"
 #include "DebugHelper.hpp"
+#include "CowBuildConfig.hpp"
 
-// #define COW_DISABLE_BOUNDS_CHECK
-
-#define INDEXC(i, j, k, m, n) (n5 * (n4 * (n3 * (n2 * i + j) + k) + m) + n)
-#define INDEXF(i, j, k, m, n) (n1 * (n2 * (n3 * (n4 * n + m) + k) + j) + i)
-#define INDEX(i, j, k, m, n) (ordering == 'C' ? INDEXC(i, j, k, m, n) : INDEXF(i, j, k, m, n))
-#define INDEX_ERROR(ii, nn) std::logic_error(#ii "=" + std::to_string (ii) + " not in bounds [0 " + std::to_string (nn) + "]")
+#define INDEX(i, j, k, m, n) (S[0] * i + S[1] * j + S[2] * k + S[3] * m + S[4] * n)
+#define INDEX_ERROR(ii, nn) std::logic_error(#ii "=" + std::to_string (ii) + " not in bounds [0 " + std::to_string (nn) + ")")
 #ifndef COW_DISABLE_BOUNDS_CHECK
 #define BOUNDS_CHECK(i, j, k, m, n) do { \
 if ( !(0 <= i && i < n1)) throw INDEX_ERROR(i, n1);\
@@ -17,8 +14,10 @@ if ( !(0 <= j && j < n2)) throw INDEX_ERROR(j, n2);\
 if ( !(0 <= k && k < n3)) throw INDEX_ERROR(k, n3);\
 if ( !(0 <= m && m < n4)) throw INDEX_ERROR(m, n4);\
 if ( !(0 <= n && n < n5)) throw INDEX_ERROR(n, n5); } while (0)
+#define BOUNDS_CHECK_LINEAR(n) if (! (0 <= n && n < size())) throw std::logic_error ("Linear index not in range");
 #else
 #define BOUNDS_CHECK(i, j, k, m, n) do { } while (0)
+#define BOUNDS_CHECK_LINEAR(n) do { } while (0)
 #endif
 
 using namespace Cow;
@@ -42,9 +41,21 @@ HeapAllocation::HeapAllocation() : numberOfBytes (0)
     allocation = nullptr;
 }
 
+HeapAllocation::~HeapAllocation()
+{
+    std::free (allocation);
+}
+
 HeapAllocation::HeapAllocation (std::size_t numberOfBytes) : numberOfBytes (numberOfBytes)
 {
-    allocation = std::malloc (numberOfBytes);
+    if (numberOfBytes == 0)
+    {
+        allocation = nullptr;
+    }
+    else
+    {
+        allocation = std::malloc (numberOfBytes);
+    }
 }
 
 HeapAllocation::HeapAllocation (const HeapAllocation& other) : numberOfBytes (other.numberOfBytes)
@@ -67,18 +78,29 @@ HeapAllocation::HeapAllocation (HeapAllocation&& other)
     other.numberOfBytes = 0;
 }
 
-HeapAllocation::~HeapAllocation()
-{
-    std::free (allocation);
-}
-
 HeapAllocation& HeapAllocation::operator= (const HeapAllocation& other)
 {
     if (&other != this)
     {
-        numberOfBytes = other.numberOfBytes;
-        allocation = std::realloc (allocation, numberOfBytes);
+        if (numberOfBytes != other.numberOfBytes)
+        {
+            numberOfBytes = other.numberOfBytes;
+            allocation = std::realloc (allocation, numberOfBytes);
+        }
         std::memcpy (allocation, other.allocation, numberOfBytes);
+    }
+    return *this;
+}
+
+HeapAllocation& HeapAllocation::operator= (HeapAllocation&& other)
+{
+    if (&other != this)
+    {
+        std::free (allocation);
+        allocation = other.allocation;
+        numberOfBytes = other.numberOfBytes;
+        other.allocation = nullptr;
+        other.numberOfBytes = 0;
     }
     return *this;
 }
@@ -112,6 +134,115 @@ HeapAllocation HeapAllocation::swapBytes (std::size_t bytesPerEntry) const
     }
     return M;
 }
+
+
+
+
+// ============================================================================
+Shape3D::Shape3D()
+{
+    S = Shape {{ 0, 0, 0, 0, 0 }};
+}
+
+Shape3D::Shape3D (int n1, int n2, int n3)
+{
+    S = Shape {{ n1, n2, n3, 1, 1 }};
+}
+
+Shape3D::Shape3D (Shape S) : S (S)
+{
+
+}
+
+Shape3D::Shape3D (const Array& A) : S (A.shape())
+{
+
+}
+
+Shape3D::operator Shape() const
+{
+    return S;
+}
+
+const int &Shape3D::operator[] (int index) const
+{
+    return S[index];
+}
+
+int &Shape3D::operator[] (int index)
+{
+    return S[index];
+}
+
+Shape3D Shape3D::operator*(int x) const
+{
+    return Shape {{ S[0] * x, S[1] * x, S[2] * x, S[3], S[4] }};
+}
+
+Shape3D Shape3D::operator/(int x) const
+{
+    return Shape {{ S[0] / x, S[1] / x, S[2] / x, S[3], S[4] }};
+}
+
+Shape3D Shape3D::increased (int delta) const
+{
+    return Shape {{ S[0] + delta, S[1] + delta, S[2] + delta, S[3], S[4] }};
+}
+
+Shape3D Shape3D::increased (Shape delta) const
+{
+    return Shape {{ S[0] + delta[0], S[1] + delta[1], S[2] + delta[2], S[3], S[4] }};
+}
+
+Shape3D Shape3D::increased (int axis, int delta) const
+{
+    auto s = S;
+    s[axis] += delta;
+    return s;
+}
+
+Shape3D Shape3D::reduced (int delta) const
+{
+    return Shape {{ S[0] - delta, S[1] - delta, S[2] - delta, S[3], S[4] }};
+}
+
+Shape3D Shape3D::reduced (Shape delta) const
+{
+    return Shape {{ S[0] - delta[0], S[1] - delta[1], S[2] - delta[2], S[3], S[4] }};
+}
+
+Shape3D Shape3D::reduced (int axis, int delta) const
+{
+    auto s = S;
+    s[axis] -= delta;
+    return s;
+}
+
+Shape3D Shape3D::withComponents (int numComponents) const
+{
+    return Shape {{ S[0], S[1], S[2], numComponents, S[4] }};
+}
+
+Shape3D Shape3D::withRank (int rank) const
+{
+    return Shape {{ S[0], S[1], S[2], S[3], rank }};
+}
+
+bool Shape3D::contains (Shape3D other) const
+{
+    return other.S[0] <= S[0] && other.S[1] <= S[1] && other.S[2] <= S[2];
+}
+
+void Shape3D::deploy (std::function<void (int i, int j, int k)> function) const
+{
+    for (int i = 0; i < S[0]; ++i)
+    for (int j = 0; j < S[1]; ++j)
+    for (int k = 0; k < S[2]; ++k)
+    {
+        function (i, j, k);
+    }
+}
+
 
 
 
@@ -172,6 +303,11 @@ Region Region::whole (Shape shape)
     return Region().absolute (shape);
 }
 
+Region::Region (Shape shape)
+{
+    *this = Region::whole (shape);
+}
+
 Region::Region()
 {
     for (int n = 0; n < 5; ++n)
@@ -180,6 +316,40 @@ Region::Region()
         upper[n] = 0;
         stride[n] = 1;
     }
+}
+
+Region Region::withRange (int axis, int lower, int upper, int stride) const
+{
+    assert (axis < 5);
+    auto R = *this;
+    R.lower[axis] = lower;
+    R.upper[axis] = upper;
+    R.stride[axis] = stride;
+    return R;
+}
+
+Region Region::withLower (int axis, int newLower) const
+{
+    assert (axis < 5);
+    auto R = *this;
+    R.lower[axis] = newLower;
+    return R;
+}
+
+Region Region::withUpper (int axis, int newUpper) const
+{
+    assert (axis < 5);
+    auto R = *this;
+    R.upper[axis] = newUpper;
+    return R;
+}
+
+Region Region::withStride (int axis, int newStride) const
+{
+    assert (axis < 5);
+    auto R = *this;
+    R.stride[axis] = newStride;
+    return R;
 }
 
 bool Region::isRelative() const
@@ -205,6 +375,12 @@ bool Region::operator== (const Region& other) const
     return upper == other.upper && lower == other.lower && stride == other.stride;
 }
 
+int Region::size() const
+{
+    auto S = shape();
+    return S[0] * S[1] * S[2] * S[3] * S[4];
+}
+
 Shape Region::shape() const
 {
     return {{
@@ -213,6 +389,11 @@ Shape Region::shape() const
         range (2).size(),
         range (3).size(),
         range (4).size() }};
+}
+
+Shape3D Region::shape3D() const
+{
+    return shape();
 }
 
 std::vector<int> Region::getShapeVector() const
@@ -228,6 +409,7 @@ Region Region::absolute (Shape shape) const
     {
         if (R.lower[n] <  0) R.lower[n] += shape[n];
         if (R.upper[n] <= 0) R.upper[n] += shape[n];
+        if (R.lower[n] > R.upper[n]) throw std::logic_error ("Region has negative size");
     }
     return R;
 }
@@ -242,6 +424,7 @@ Region Region::absolute (std::vector<int> shapeVector) const
         {
             if (R.lower[n] <  0) R.lower[n] += shapeVector[n];
             if (R.upper[n] <= 0) R.upper[n] += shapeVector[n];
+            if (R.lower[n] > R.upper[n]) throw std::logic_error ("Region has negative size");
         }
         else
         {
@@ -302,7 +485,6 @@ Array::Array (int n1, int n2, int n3, int n4) : Array (n1, n2, n3, n4, 1)
 }
 
 Array::Array (int n1, int n2, int n3, int n4, int n5) :
-ordering ('C'),
 n1 (n1),
 n2 (n2),
 n3 (n3),
@@ -314,12 +496,17 @@ memory (n1 * n2 * n3 * n4 * n5 * sizeof (double))
     {
         memory.getElement<double> (i) = 0.0;
     }
+    S[0] = n5 * n4 * n3 * n2;
+    S[1] = n5 * n4 * n3;
+    S[2] = n5 * n4;
+    S[3] = n5;
+    S[4] = 1;
 }
 
 Array::Array (const Array& other)
 {
     memory = other.memory;
-    ordering = other.ordering;
+    S = other.S;
     n1 = other.n1;
     n2 = other.n2;
     n3 = other.n3;
@@ -330,13 +517,18 @@ Array::Array (const Array& other)
 Array::Array (Array&& other)
 {
     memory = std::move (other.memory);
-    ordering = other.ordering;
+    S = other.S;
     n1 = other.n1;
     n2 = other.n2;
     n3 = other.n3;
     n4 = other.n4;
     n5 = other.n5;
-    other = Array();
+    other.S = {{1, 1, 1, 1, 1}};
+    other.n1 = 0;
+    other.n2 = 1;
+    other.n3 = 1;
+    other.n4 = 1;
+    other.n5 = 1;
 }
 
 Array& Array::operator= (const Array& other)
@@ -344,7 +536,7 @@ Array& Array::operator= (const Array& other)
     if (&other != this)
     {
         memory = other.memory;
-        ordering = other.ordering;
+        S = other.S;
         n1 = other.n1;
         n2 = other.n2;
         n3 = other.n3;
@@ -354,10 +546,25 @@ Array& Array::operator= (const Array& other)
     return *this;
 }
 
-void Array::setOrdering (char orderingMode)
+Array& Array::operator= (Array&& other)
 {
-    assert (orderingMode == 'C' || orderingMode == 'F');
-    ordering = orderingMode;
+    if (&other != this)
+    {
+        memory = std::move (other.memory);
+        S = other.S;
+        n1 = other.n1;
+        n2 = other.n2;
+        n3 = other.n3;
+        n4 = other.n4;
+        n5 = other.n5;
+        other.S = {{1, 1, 1, 1, 1}};
+        other.n1 = 0;
+        other.n2 = 1;
+        other.n3 = 1;
+        other.n4 = 1;
+        other.n5 = 1;
+    }
+    return *this;
 }
 
 int Array::size() const
@@ -383,9 +590,14 @@ Shape Array::shape() const
     return {{n1, n2, n3, n4, n5}};
 }
 
-char Array::getOrdering() const
+Shape3D Array::shape3D() const
 {
-    return ordering;
+    return shape();
+}
+
+Shape Array::strides() const
+{
+    return S;
 }
 
 std::vector<int> Array::getShapeVector() const
@@ -395,8 +607,7 @@ std::vector<int> Array::getShapeVector() const
 
 Array Array::transpose() const
 {
-    Array A (n5, n4, n3, n2, n1);
-    A.ordering = ordering;
+    auto A = Array (n5, n4, n3, n2, n1);
 
     for (int i = 0; i < n1; ++i)
     for (int j = 0; j < n2; ++j)
@@ -411,13 +622,12 @@ Array Array::transpose() const
 
 Array Array::transpose (int axis1, int axis2) const
 {
-    Shape sourceShape = shape();
-    Shape targetShape = shape();
+    auto sourceShape = shape();
+    auto targetShape = shape();
     targetShape[axis1] = sourceShape[axis2];
     targetShape[axis2] = sourceShape[axis1];
 
-    Array A (targetShape);
-    A.ordering = ordering;
+    auto A = Array (targetShape);
 
     for (int i = 0; i < n1; ++i)
     for (int j = 0; j < n2; ++j)
@@ -425,8 +635,8 @@ Array Array::transpose (int axis1, int axis2) const
     for (int m = 0; m < n4; ++m)
     for (int n = 0; n < n5; ++n)
     {
-        Index sourceIndex {{i, j, k, m, n}};
-        Index targetIndex {{i, j, k, m, n}};
+        auto sourceIndex = Index {{i, j, k, m, n}};
+        auto targetIndex = Index {{i, j, k, m, n}};
         targetIndex[axis1] = sourceIndex[axis2];
         targetIndex[axis2] = sourceIndex[axis1];
 
@@ -443,13 +653,13 @@ Array Array::transpose (int axis1, int axis2) const
 
 double& Array::operator[] (int index)
 {
-    assert (0 <= index && index < size());
+    BOUNDS_CHECK_LINEAR (index);
     return memory.getElement<double> (index);
 }
 
 const double& Array::operator[] (int index) const
 {
-    assert (0 <= index && index < size());
+    BOUNDS_CHECK_LINEAR (index);
     return memory.getElement<double> (index);
 }
 
@@ -520,68 +730,78 @@ const double& Array::operator() (int i, int j, int k, int m, int n) const
 
 Array Array::extract (Region R) const
 {
-    Region region = R.absolute (shape());
-    Array A (region.shape());
-    copyRegion (A, *this, region, 'A');
+    auto A = Array (R.shape());
+    A.copyFrom (*this, Region(), R);
     return A;
 }
 
-void Array::insert (const Array& source, Region R)
+void Array::insert (const Array& A, Region R)
 {
-    Region region = R.absolute (shape());
-
-    if (source.shape() != region.shape())
-    {
-        throw std::runtime_error ("source and target regions have different shapes");
-    }
-
-    copyRegion (*this, source, region, 'B');
+    copyFrom (A, R, Region());
 }
 
-void Array::copyRegion (Array& dst, const Array& src, Region R, char mode)
+void Array::copyFrom (const Array&A, Region target, Region source)
 {
-    assert (! R.isRelative());
+    target.ensureAbsolute (shape());
+    source.ensureAbsolute (A.shape());
+    copyRegion (*this, A, target, source);
+}
 
-    const Range is = R.range (0);
-    const Range js = R.range (1);
-    const Range ks = R.range (2);
-    const Range ms = R.range (3);
-    const Range ns = R.range (4);
-    const int i0 = is.lower;
-    const int j0 = js.lower;
-    const int k0 = ks.lower;
-    const int m0 = ms.lower;
-    const int n0 = ns.lower;
-
-    for (int i = i0; i < is.upper; i += is.stride)
-    for (int j = j0; j < js.upper; j += js.stride)
-    for (int k = k0; k < ks.upper; k += ks.stride)
-    for (int m = m0; m < ms.upper; m += ms.stride)
-    for (int n = n0; n < ns.upper; n += ns.stride)
+void Array::reshape (int n1_, int n2_, int n3_, int n4_, int n5_)
+{
+    if (size() != n1_ * n2_ * n3_ * n4_ * n5_)
     {
-        switch (mode)
-        {
-            case 'A': // Extract: the region refers to the source array.
-            {
-                dst (i - i0, j - j0, k - k0, m - m0, n - n0) = src (i, j, k, m, n);
-                break;
-            }
-            case 'B': // Insert: the region refers to the target array.
-            {
-                dst (i, j, k, m, n) = src (i - i0, j - j0, k - k0, m - m0, n - n0);
-                break;                
-            }
-        }
+        throw std::logic_error ("reshape operation would change array size");
     }
+    n1 = n1_;
+    n2 = n2_;
+    n3 = n3_;
+    n4 = n4_;
+    n5 = n5_;
+    S[0] = n5 * n4 * n3 * n2;
+    S[1] = n5 * n4 * n3;
+    S[2] = n5 * n4;
+    S[3] = n5;
+    S[4] = 1;
+}
+
+void Array::copyRegion (Array& dst, const Array& src, Region R1, Region R0)
+{
+    assert (! R0.isRelative());
+    assert (! R1.isRelative());
+
+    if (R0.shape() != R1.shape())
+    {
+        throw std::logic_error ("source and target regions have different shapes");
+    }
+
+    for (int i0 = R0.lower[0], i1 = R1.lower[0]; i0 < R0.upper[0] && i1 < R1.upper[0]; i0 += R0.stride[0], i1 += R1.stride[0])
+    for (int j0 = R0.lower[1], j1 = R1.lower[1]; j0 < R0.upper[1] && j1 < R1.upper[1]; j0 += R0.stride[1], j1 += R1.stride[1])
+    for (int k0 = R0.lower[2], k1 = R1.lower[2]; k0 < R0.upper[2] && k1 < R1.upper[2]; k0 += R0.stride[2], k1 += R1.stride[2])
+    for (int m0 = R0.lower[3], m1 = R1.lower[3]; m0 < R0.upper[3] && m1 < R1.upper[3]; m0 += R0.stride[3], m1 += R1.stride[3])
+    for (int n0 = R0.lower[4], n1 = R1.lower[4]; n0 < R0.upper[4] && n1 < R1.upper[4]; n0 += R0.stride[4], n1 += R1.stride[4])
+    {
+        dst (i1, j1, k1, m1, n1) = src (i0, j0, k0, m0, n0);
+    }
+}
+
+Array Array::map (std::function<double (double)> function) const
+{
+    auto A = *this;
+
+    for (auto& x : A)
+    {
+        x = function (x);
+    }
+    return A;
 }
 
 Shape Array::shapeFromVector (std::vector<int> shapeVector)
 {
     if (shapeVector.size() > 5)
     {
-        throw std::runtime_error ("shape vector must have size <= 5");
+        throw std::logic_error ("shape vector must have size <= 5");
     }
-
     return {{
         shapeVector.size() > 0 ? shapeVector[0] : 1,
         shapeVector.size() > 1 ? shapeVector[1] : 1,
@@ -602,6 +822,24 @@ std::vector<int> Array::vectorFromShape (Shape shape)
     return std::vector<int> (&shape[0], &shape[lastNonEmptyAxis] + 1);
 }
 
+bool Array::isBoundsCheckDisabled()
+{
+#ifdef COW_DISABLE_BOUNDS_CHECK
+    return true;
+#else
+    return false;
+#endif
+}
+
+void Array::deploy (Shape shape, std::function<void (int i, int j, int k)> function)
+{
+    for (int i = 0; i < shape[0]; ++i)
+    for (int j = 0; j < shape[1]; ++j)
+    for (int k = 0; k < shape[2]; ++k)
+    {
+        function (i, j, k);
+    }
+}
 
 
 
@@ -610,6 +848,15 @@ std::vector<int> Array::vectorFromShape (Shape shape)
 Array::Reference::Reference (Array& A, Region R) : A (A), R (R)
 {
     assert (! R.isRelative());
+
+    if (   R.lower[0] < 0 || R.upper[0] > A.n1
+        || R.lower[1] < 0 || R.upper[1] > A.n2
+        || R.lower[2] < 0 || R.upper[2] > A.n3
+        || R.lower[3] < 0 || R.upper[3] > A.n4
+        || R.lower[4] < 0 || R.upper[4] > A.n5)
+    {
+        throw std::runtime_error ("region is not within array extent");
+    }
 }
 
 const Array& Array::Reference::operator= (const Array& source)
@@ -624,6 +871,11 @@ const Array::Reference& Array::Reference::operator= (const Array::Reference& sou
     return source;
 }
 
+Array& Array::Reference::getArray()
+{
+    return A;
+}
+
 const Array& Array::Reference::getArray() const
 {
     return A;
@@ -632,6 +884,11 @@ const Array& Array::Reference::getArray() const
 const Region& Array::Reference::getRegion() const
 {
     return R;
+}
+
+int Array::Reference::size (int axis) const
+{
+    return R.range (axis).size();
 }
 
 Shape Array::Reference::shape() const
@@ -723,13 +980,7 @@ double* Array::Iterator::getAddress() const
 {
     // Computing the index directly may be 10-20% faster than calling
     // Array::operator().
-
     const Index& I = currentIndex;
-    const char ordering = A.ordering;
-    const int n1 = A.n1;
-    const int n2 = A.n2;
-    const int n3 = A.n3;
-    const int n4 = A.n4;
-    const int n5 = A.n5;
+    const Shape& S = A.S;
     return &A.memory.getElement<double> (INDEX(I[0], I[1], I[2], I[3], I[4]));
 }

@@ -14,7 +14,82 @@ namespace Cow
     class MpiCommunicator;
     class MpiCartComm;
     class MpiDataType;
+    class MpiRequest;
     class MpiSession;
+
+
+    /**
+    A mirror of the MPI_Status data structure, but also with flag which
+    indicates the result of probe and test calls.
+    */
+    class MpiStatus
+    {
+    public:
+        int flag;
+        int count;
+        int cancelled;
+        int source;
+        int tag;
+        int error;
+    };
+
+
+    /**
+    Class to encapulate certain responsibilities of an MPI request, which
+    facilitate non-blocking communications. There are helpful resources at
+    this link:
+
+    https://cvw.cac.cornell.edu/mpip2p/waittestfree
+    */
+    class MpiRequest
+    {
+    public:
+        /**
+        Destructor, called when the request object goes out of scope. Will log
+        a message to stderr if going out of scope before the request has been
+        completed or canceled, which acts as some built-in assurance that
+        dangling request handles are not accumulating in the MPI system.
+        */
+        ~MpiRequest();
+
+        /**
+        Cancels the request. It is safe for the requeset to go out of scope
+        after this call.
+        */
+        void cancel();
+
+        /**
+        Blocking call that returns only when a specified operation has been
+        completed (e.g., the send buffer is safe to access). This call should
+        be inserted at the point where the next section of code depends on the
+        buffer, because it forces the process to block until the buffer is
+        ready. After this function returns, it is safe for the request to go
+        out of scope.
+        */
+        void wait();
+
+        /**
+        Non-blocking counterpart to wait. Returns true if the request has been
+        completed. If it has, then test also deactivates the request; it is safe
+        for the request to go out of scope.
+        */
+        bool test();
+
+        /**
+        Calls MPI_Request_get_status, which returns the status of the request
+        without triggering completion of the message. Even if this method
+        returns true, it is still necessary to call test() before alloing the
+        object to go out of scope.
+        */
+        bool getStatus() const;
+
+    private:
+        friend class MpiCommunicator;
+        struct Internals;
+        MpiRequest (Internals*);
+        std::unique_ptr<Internals> internals;
+    };
+
 
     /**
     Class to encapulate certain responsibilities of an MPI communicator.
@@ -22,7 +97,6 @@ namespace Cow
     class MpiCommunicator
     {
     public:
-        struct Internals;
         static MpiCommunicator world();
 
         /**
@@ -31,10 +105,14 @@ namespace Cow
         */
         MpiCommunicator();
 
-        /** Return the rank of this communicator. */
+        /**
+        Return the rank of this communicator.
+        */
         int rank() const;
 
-        /** Return the number of processes in this communicator. */
+        /**
+        Return the number of processes in this communicator.
+        */
         int size() const;
 
         /**
@@ -70,6 +148,11 @@ namespace Cow
         MpiCartComm createCartesian (int ndims, std::vector<bool> axisIsDistributed={}) const;
 
         /**
+        Create a new communicator by calling MPI_Comm_split, with the given color.
+        */
+        MpiCommunicator split (int color) const;
+
+        /**
         Return the minimum value over all participating processes, to all
         processes. This invokes an MPI_Allreduce opertion.
         */
@@ -81,11 +164,31 @@ namespace Cow
         */
         double maximum (double x) const;
 
+        double dsum (double x) const;
+
+
+        /**
+        Return a vector of quantities, each of which is summed over all
+        participating ranks.
+        */
+        std::vector<double> sum (const std::vector<double>& A) const;
+
+        /**
+        These methods are a draft of an interface for synchronous and
+        asynchronous send and receive operations. They are not implemented yet.
+        Consider having non-blocking sends and receives (post and request) keep
+        the request objects as member data in the communicator.
+        */
+        void send (const HeapAllocation& bufferToSend, int rank, int tag=0) const;
+        MpiRequest post (const HeapAllocation& bufferToPost, int rank, int tag=0) const;
+        HeapAllocation receive (int rank, int tag=0) const;
+        MpiRequest request (int rank, int tag=0) const;
+
     protected:
+        struct Internals;
         MpiCommunicator (Internals*);
         std::shared_ptr<Internals> internals;
     };
-
 
 
 
@@ -114,10 +217,14 @@ namespace Cow
         */
         int shift (int axis, int offset) const;
 
-        /** Return the number of dimensions in the array of blocks. */
+        /**
+        Return the number of dimensions in the array of blocks.
+        */
         int getNumberOfDimensions() const;
 
-        /** Return the dimensions of the array of blocks. */
+        /**
+        Return the dimensions of the array of blocks.
+        */
         std::vector<int> getDimensions() const;
 
         /**
@@ -128,7 +235,7 @@ namespace Cow
         std::vector<int> getCoordinates (int processRank=-1) const;
 
         /**
-        Excute an MPI send-recv operation by shifting the cartesian topology
+        Execute an MPI send-recv operation by shifting the cartesian topology
         along the given axis. Data will be sent in the direction specified, by
         either 'L' or 'R'. For example, if sendDirection is 'R' then the
         region of A covered by 'send' is sent to the process on the right,
@@ -145,12 +252,12 @@ namespace Cow
 
 
 
-
+    /**
+    Class to encapulate certain responsibilities of an MPI data type.
+    */
     class MpiDataType
     {
     public:
-        struct Internals;
-
         static MpiDataType nativeInt();
         static MpiDataType nativeDouble();
 
@@ -173,6 +280,7 @@ namespace Cow
 
     protected:
         friend class MpiCartComm;
+        struct Internals;
         MpiDataType (Internals*);
         std::shared_ptr<Internals> internals;
     };

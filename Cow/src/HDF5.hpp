@@ -19,14 +19,13 @@ namespace Cow
         // ====================================================================
 
 
-        class Attribute;
         class DataSet;
         class DataSpace;
         class DataType;
         class File;
         class Group;
+        class Location;
         class Object;
-
 
 
 
@@ -53,10 +52,68 @@ namespace Cow
         };
 
 
+        class PropertyList
+        {
+        public:
+            class Base : public ObjectProvider
+            {
+            public:
+                const Object* getObject() const override;
+            protected:
+                Base (long long typeIdentifier);
+            private:
+                std::shared_ptr<Object> object;
+            };
+
+            /**
+            A class that encapuslates an HDF5 property list created with
+            H5P_DATASET_CREATE.
+            */            
+            class DataSetCreate : public Base
+            {
+            public:
+                DataSetCreate();
+                DataSetCreate& setChunk (std::vector<int> dims);
+            };
+        };
+
+
+        /**
+        A class representing an HDF5 data type.
+        */
+        class DataType
+        {
+        public:
+            static DataType boolean();
+            static DataType nativeInt();
+            static DataType nativeDouble();
+            static DataType nativeString (int length);
+
+            /** Return the size in bytes of this data type. */
+            std::size_t bytes() const;
+
+            /**
+            Return the clostest matching native data type through H5Tget_native.
+            */
+            DataType native() const;
+
+            /**
+            Equality overload: calls the H5Tequal function.
+            */
+            bool operator== (const DataType& other) const;
+
+        private:
+            friend class DataSet;
+            friend class Location;
+            DataType (Object* object);
+            std::shared_ptr<Object> object;
+        };
+
+
         /**
         A base class for locations that can create groups (File and Group).
         */
-        class GroupCreator : public virtual ObjectProvider
+        class Location : public virtual ObjectProvider
         {
         public:
             /**
@@ -80,15 +137,7 @@ namespace Cow
             must not already exist.
             */
             Group createGroup (std::string name);
-        };
 
-
-        /**
-        A base class for locations that can create data sets (File and Group).
-        */
-        class DataSetCreator : public virtual ObjectProvider
-        {
-        public:
             /**
             Return true if the object has a data set with the given name.
             */
@@ -100,6 +149,16 @@ namespace Cow
             bool hasDataSets (std::vector<std::string> names) const;
 
             /**
+            Return the names of all data sets under this location.
+            */
+            std::vector<std::string> getDataSetNames() const;
+
+            /**
+            Return the names of all groups under this location.
+            */
+            std::vector<std::string> getGroupNames() const;
+
+            /**
             Get a data set at this location with the given name. The data set
             must already exist.
             */
@@ -108,25 +167,21 @@ namespace Cow
             /**
             Create a scalar data set at this location with the given type.
             */
-            DataSet createDataSet (std::string name, const DataType& type);
-
-            /**
-            Create an array data set at this location with the given shape,
-            and type of double.
-            */
-            DataSet createDataSet (std::string name, std::vector<int> shape);
+            DataSet createDataSet (std::string name, DataType type);
 
             /**
             Create an array data set at this location with the given shape and
             type.
             */
-            DataSet createDataSet (std::string name, std::vector<int> shape, const DataType& type);
+            DataSet createDataSet (std::string name, std::vector<int> shape,
+                DataType type=DataType::nativeDouble(),
+                PropertyList::DataSetCreate properties=PropertyList::DataSetCreate());
 
             /**
             Iterate over all HDF5 locations below this one, invoking the given
             callback with the name of the location.
             */
-            void iterate (std::function<void (std::string)> callback);
+            void iterate (std::function<void (std::string)> callback) const;
 
             /**
             Read several data sets and return an array with those data sets
@@ -139,7 +194,8 @@ namespace Cow
             int readInt (std::string name) const;
             double readDouble (std::string name) const;
             std::string readString (std::string name) const;
-            Variant readVariant (std::string name) const; // DOWN
+            Variant readVariant (std::string name) const;
+            Variant::NamedValues readNamedValues() const;
             Array readArray (std::string name) const;
             std::vector<int> readVectorInt (std::string name);
             std::vector<double> readVectorDouble (std::string name);
@@ -153,21 +209,12 @@ namespace Cow
             DataSet writeArray (std::string name, const Array::Reference reference);
             DataSet writeVectorInt (std::string name, const std::vector<int>& value);
             DataSet writeVectorDouble (std::string name, const std::vector<double>& value);
-        };
 
-
-        /**
-        A base class for locations that can create attributes (not yet
-        implemented).
-        */
-        class AttributeCreator : public virtual ObjectProvider
-        {
-        public:
             /**
-            Create a data set below this location with the given name and
-            shape.
+            Copy the contents of the location with the given name, to a new
+            location of the same name under the target.
             */
-            Attribute createAttribute (std::string name, const DataType& type);
+            void copy (std::string name, Location& target) const;
         };
 
 
@@ -176,18 +223,6 @@ namespace Cow
         // ====================================================================
         // Classes for concrete HDF5 objects
         // ====================================================================
-
-
-        /**
-        A class representing an HDF5 attribute.
-        */
-        class Attribute
-        {
-        private:
-            friend class AttributeCreator;
-            Attribute (Object* object);
-            std::shared_ptr<Object> object;
-        };
 
 
         /**
@@ -256,7 +291,7 @@ namespace Cow
             Reference operator[] (Cow::Region region);
 
         private:
-            friend class DataSetCreator;
+            friend class Location;
             DataSet (Object* object);
             std::shared_ptr<Object> object;
         };
@@ -297,40 +332,8 @@ namespace Cow
 
         private:
             friend class DataSet;
-            friend class DataSetCreator;
+            friend class Location;
             DataSpace (Object* object);
-            std::shared_ptr<Object> object;
-        };
-
-
-        /**
-        A class representing an HDF5 data type.
-        */
-        class DataType
-        {
-        public:
-            static DataType boolean();
-            static DataType nativeInt();
-            static DataType nativeDouble();
-            static DataType nativeString (int length);
-
-            /** Return the size in bytes of this data type. */
-            std::size_t bytes() const;
-
-            /**
-            Return the clostest matching native data type through H5Tget_native.
-            */
-            DataType native() const;
-
-            /**
-            Equality overload: calls the H5Tequal function.
-            */
-            bool operator== (const DataType& other) const;
-
-        private:
-            friend class DataSet;
-            friend class DataSetCreator;
-            DataType (Object* object);
             std::shared_ptr<Object> object;
         };
 
@@ -338,7 +341,7 @@ namespace Cow
         /**
         A class representing an HDF5 file.
         */
-        class File : public GroupCreator, public DataSetCreator
+        class File : public Location
         {
         public:
             /**
@@ -362,10 +365,10 @@ namespace Cow
         /**
         A class representing an HDF5 group.
         */
-        class Group : public GroupCreator, public DataSetCreator
+        class Group : public Location
         {
         private:
-            friend class GroupCreator;
+            friend class Location;
             Group (Object* object);
             const Object* getObject() const override { return object.get(); }
             std::shared_ptr<Object> object;

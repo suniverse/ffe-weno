@@ -36,6 +36,26 @@ public:
 
 
 // ============================================================================
+struct MpiRequest::Internals
+{
+public:
+    Internals (MPI_Request request) : request (request)
+    {
+
+    }
+
+    ~Internals()
+    {
+        MPI_Request_free (&request);
+    }
+
+    MPI_Request request;
+};
+
+
+
+
+// ============================================================================
 struct MpiDataType::Internals
 {
 public:
@@ -59,6 +79,60 @@ public:
     MPI_Datatype type;
 };
 
+
+
+
+// ============================================================================
+MpiRequest::MpiRequest (Internals* internals) : internals (internals)
+{
+
+}
+
+MpiRequest::~MpiRequest()
+{
+    if (! test())
+    {
+        std::cerr
+        << "Warning: an MPI request is going out of scope "
+        << "before being fulfilled."
+        << std::endl;
+    }
+}
+
+void MpiRequest::cancel()
+{
+    // Note this function takes a pointer to the request handle, as it intends
+    // to modify its value if the request is fulfilled.
+    MPI_Cancel (&internals->request);
+}
+
+void MpiRequest::wait()
+{
+    // Note this function takes a pointer to the request handle, as it intends
+    // to modify its value if the request is fulfilled.
+    MPI_Status status;
+    MPI_Wait (&internals->request, &status);
+}
+
+bool MpiRequest::test()
+{
+    // Note this function takes a pointer to the request handle, as it intends
+    // to modify its value if the request is fulfilled.
+    int result;
+    MPI_Status status;
+    MPI_Test (&internals->request, &result, &status);
+    return result;
+}
+
+bool MpiRequest::getStatus() const
+{
+    // Note this function does *not* take a pointer to the request handle, as
+    // it does not modify its value even if the request is fulfilled.
+    int result;
+    MPI_Status status;
+    MPI_Request_get_status (internals->request, &result, &status);
+    return result;
+}
 
 
 
@@ -122,6 +196,7 @@ MpiCartComm MpiCommunicator::createCartesian (int ndims, std::vector<bool> axisI
 
     // Set the dims array to have size 1 where axisIsDistributed is false. An
     // entry of 0 in dims causes MPI_Dims_create to decompose that axis.
+
     for (auto isDistributed : axisIsDistributed)
     {
         if (! isDistributed)
@@ -137,16 +212,39 @@ MpiCartComm MpiCommunicator::createCartesian (int ndims, std::vector<bool> axisI
     return new Internals (cart, true);
 }
 
+MpiCommunicator MpiCommunicator::split (int color) const
+{
+    int key = 0; // Determines rank ordering, 0 uses old ordering.
+    MPI_Comm comm;
+    MPI_Comm_split (internals->comm, color, key, &comm);
+    return new Internals (comm, true);
+}
+
 double MpiCommunicator::minimum (double x) const
 {
     MPI_Allreduce (MPI_IN_PLACE, &x, 1, MPI_DOUBLE, MPI_MIN, internals->comm);
     return x;
 }
 
+
 double MpiCommunicator::maximum (double x) const
 {
     MPI_Allreduce (MPI_IN_PLACE, &x, 1, MPI_DOUBLE, MPI_MAX, internals->comm);
     return x;
+}
+
+std::vector<double> MpiCommunicator::sum (const std::vector<double>& A) const
+{
+    auto ret = A;
+    MPI_Allreduce (MPI_IN_PLACE, &ret[0], ret.size(), MPI_DOUBLE, MPI_SUM, internals->comm);
+    return ret;
+}
+
+double MpiCommunicator::dsum (double x) const
+{
+    double ret = 0;
+    MPI_Allreduce (&x, &ret, 1, MPI_DOUBLE, MPI_SUM, internals->comm);
+    return ret;
 }
 
 
