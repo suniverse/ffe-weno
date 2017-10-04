@@ -100,7 +100,7 @@ void SimulationControl::OutputData(MpiCommunicator world, Cart cart, SolutionDat
 	G.writeVectorDouble ("TotalEnergy", TotalEnergy);
 	G.writeVectorDouble ("ElectricEnergy", ElectricEnergy);
 	G.writeVectorDouble ("MagneticEnergy", MagneticEnergy);
-
+	G.writeVectorDouble ("OhmHeat", OhmHeat);
 
 	auto G1 = F.createGroup("StartIndex");
 	G1.writeInt("startI", cart.StartPos[0]);
@@ -127,9 +127,11 @@ void SimulationControl::UpdateTimeSeries(MpiCommunicator world, SolutionData sol
 	double Beng = world.dsum(solution.MagneticEnergy);
 	double Eeng = world.dsum(solution.ElectricEnergy);
 	double Teng = world.dsum(solution.TotalEnergy);
+	double OHeat = world.dsum(solution.TotalOhmHeat);
 
 	MagneticEnergy.push_back(Beng);
 	ElectricEnergy.push_back(Eeng);
 	TotalEnergy.push_back(Teng);
+	OhmHeat.push_back(OHeat);
 
 }

@@ -21,6 +21,9 @@ SolutionData::SolutionData (UserParameters userParameters, Cart cart)
 		if (N[d]==1) continue;
 		dx[d] = userParameters.dx[d];
 
+		// Calculate Grid Dimension
+		GridDim += 1;
+
 		// dimension of interior (no ghost zone)
 		Nint[d] = N[d]-2*NumGhost;
 
@@ -28,6 +31,7 @@ SolutionData::SolutionData (UserParameters userParameters, Cart cart)
 		StartIndex[d] = NumGhost;
 		EndIndex[d] = N[d] - NumGhost;
 	}
+
 	// On/off sponge layer
 	SpongeLayer = userParameters.SpongeLayer;
 
@@ -215,7 +219,7 @@ void SolutionData::ComputeMaxdivB()
 			{
 				double divB = 0;
 				if ( N[0] > 1 )
-				{
+				{					
 					divB += ((PField(i-2,j,k,0)-PField(i+2,j,k,0))/12. - (PField(i-1,j,k,0)-PField(i+1,j,k,0))*2./3.);
 				}	
 				if ( N[1] > 1 )
@@ -226,6 +230,7 @@ void SolutionData::ComputeMaxdivB()
 				{
 					divB += ((PField(i,j,k-2,2)-PField(i,j,k+2,2))/12. - (PField(i,j,k-1,2)-PField(i,j,k+1,2))*2./3.);
 				}	
+
 				MaxdivB = fmax(fabs(divB), MaxdivB);
 			} // end loop over k
 		}// end loop over j
@@ -238,7 +243,7 @@ void SolutionData::InitialData()
 	//TestCases();
 
 	// Colliding Alfven packates
-	AlfvenPacket();
+	AlfvenPacket3D();
 
 	// Combine E and B field to Primitive field P
 	CombineBEtoP();
@@ -387,7 +392,7 @@ void SolutionData::TestCases()
 	}// end loop over i
 }
 
-void SolutionData::AlfvenPacket()
+void SolutionData::AlfvenPacket2D()
 {
 	//double pi = 3.1415927;
 	//double kvec[3] = {2*pi, 0, 2*pi};
@@ -433,6 +438,49 @@ void SolutionData::AlfvenPacket()
 	}// end loop over i
 }
 
+void SolutionData::AlfvenPacket3D()
+{
+	//double pi = 3.1415927;
+	//double kvec[3] = {2*pi, 0, 2*pi};
+	double amp = AmplitudeOfAlfvenPacket;
+	double spd = 0.01;
+	double c1[3] = {0.5, 0.5, 0.25};
+	double c2[3] = {0.5, 0.5, 0.75};
+
+
+	for (int i = 0; i < Nint[0]; ++i)
+	{
+		for (int j = 0; j < Nint[1]; ++j)
+		{
+			for (int k = 0; k < Nint[2]; ++k)
+			{	
+				double r1 = 0;
+				double r2 = 0;
+
+				for (int d=0; d<3; ++d)
+				{
+					r1 += (x(i,j,k,d) - c1[d]) * (x(i,j,k,d) - c1[d]);
+					r2 += (x(i,j,k,d) - c2[d]) * (x(i,j,k,d) - c2[d]);
+				}
+
+				// Create A Gaussian packate for two colliding Alfven waves
+
+				// 3D case two cylinder
+				double g1 = amp*exp(-r1/spd)*10;
+				double g2 = amp*exp(-r2/spd)*10;
+				
+				BField(i,j,k,0) = -2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
+                BField(i,j,k,1) = 2*(x(i,j,k,0)-c1[0])*g1 - 2*(x(i,j,k,0)-c2[0])*g2;
+				BField(i,j,k,2) = 1;
+
+				EField(i,j,k,0) = 2*(x(i,j,k,0)-c1[0])*g1 + 2*(x(i,j,k,0)-c2[0])*g2;
+                EField(i,j,k,1) = 2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
+
+			} // end loop over k
+		}// end loop over j
+	}// end loop over i
+}
+
 void SolutionData::InitializeResistivity()
 {
 	for (int i = StartIndex[0]; i < EndIndex[0]; ++i)
@@ -441,7 +489,15 @@ void SolutionData::InitializeResistivity()
 		{
 			for (int k = StartIndex[2]; k < EndIndex[2]; ++k)
 			{	
+				// 2D case: absorbing in X direction
 				double xsig = (fabs(x(i-StartIndex[0],j-StartIndex[1],k-StartIndex[2],0)-0.5)-0.3)/0.2;
+				if ( GridDim == 3){
+					// 3D case: absorbing in X-Y direction
+					xsig = pow(x(i-StartIndex[0],j-StartIndex[1],k-StartIndex[2],0)-0.5,2)
+				            	+ pow(x(i-StartIndex[0],j-StartIndex[1],k-StartIndex[2],1)-0.5,2);
+					xsig = (xsig-0.3)/0.2;
+					
+				} 
 				if ( xsig >= 0 ){
 					Resistivity(i,j,k) = 1. - exp(-8. * pow( xsig, 4));
 				}

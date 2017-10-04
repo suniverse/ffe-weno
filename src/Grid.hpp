@@ -80,6 +80,9 @@ private:
 	// Number of grids in each direction (no ghost zone)
 	int Nint[3] = {1,1,1};
 
+	// Number dimensions
+	int GridDim = 0;
+
 	// start and end index in each dimension (exclude ghost zones)
 	int StartIndex[3] = {0, 0, 0};
 	int EndIndex[3] = {1, 1, 1};
@@ -125,7 +128,8 @@ public:
 	// Initialize Field Configurations
 	void InitialData();
 	void TestCases();
-	void AlfvenPacket();
+	void AlfvenPacket2D();
+	void AlfvenPacket3D();
 	void InitializeResistivity();
 
 };
@@ -224,6 +228,8 @@ public:
 	std::vector<double> ElectricEnergy;
 	std::vector<double> MagneticEnergy;
 	std::vector<double> TotalEnergy;
+	std::vector<double> OhmHeat;
+
 
 	void UpdateTimeSeries(Cow::MpiCommunicator world, SolutionData solution);
 

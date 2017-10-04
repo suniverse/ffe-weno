@@ -67,7 +67,7 @@ int main()
 			printf("WARNING !!! INITIAL DATA NOT SATISFY FORCE FREE CONDITION !!!\n");
 		}
 		printf("INITIAL DATA: Max divB %.12e \n", MaxdivB);
-		if(MaxdivB > 1e-14)
+		if(MaxdivB > 1e-2)
 		{
 			printf("WARNING !!! INITIAL DATA HAS NON-ZERO DIV B !!!\n");
 		}
