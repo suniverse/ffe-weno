@@ -76,10 +76,10 @@ SolutionData::SolutionData (UserParameters userParameters, Cart cart)
 	EField = PField[ERegion];
 
 	// Initialize Resistivity
-	if ( SpongeLayer > 0 ) {
-		Resistivity = Array(N[0], N[1], N[2]);
-		DampedEnergy = Array(N[0],N[1],N[2]);
-	}
+	//if ( SpongeLayer > 0 ) {
+	Resistivity = Array(N[0], N[1], N[2]);
+	DampedEnergy = Array(N[0],N[1],N[2]);
+	//}
 }
 
 Array& SolutionData::GetBField()
@@ -570,12 +570,12 @@ void SolutionData::AlfvenPacket3D()
 				double g1 = amp*exp(-r1/spd)/width;
 				double g2 = amp*exp(-r2/spd)/width;
 				
-				BField(i,j,k,0) = -2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
-                BField(i,j,k,1) = 2*(x(i,j,k,0)-c1[0])*g1 - 2*(x(i,j,k,0)-c2[0])*g2;
+				BField(i,j,k,0) = 2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
+                BField(i,j,k,1) = -2*(x(i,j,k,0)-c1[0])*g1 - 2*(x(i,j,k,0)-c2[0])*g2;
 				BField(i,j,k,2) = 1;
 
-				EField(i,j,k,0) = 2*(x(i,j,k,0)-c1[0])*g1 + 2*(x(i,j,k,0)-c2[0])*g2;
-                EField(i,j,k,1) = 2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
+				EField(i,j,k,0) = -2*(x(i,j,k,0)-c1[0])*g1 + 2*(x(i,j,k,0)-c2[0])*g2;
+                EField(i,j,k,1) = -2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
 			} // end loop over k
 		}// end loop over j
 	}// end loop over i
