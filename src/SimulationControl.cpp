@@ -6,6 +6,9 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include "hdf5.h"
+#include "mpi.h"
+
 
 using namespace Cow;
 
@@ -81,7 +84,7 @@ void SimulationControl::OutputData(MpiCommunicator world, Cart cart, SolutionDat
 	Cow::Array B = solution.GetBField();
 	Cow::Array E = solution.GetEField();
 	//Cow::Array P = solution.GetPField();
-
+	
 	auto F = H5::File(stream.str(),"w");
 	F.writeArray("magnetic",B);
 	F.writeArray("electric",E);
@@ -100,7 +103,9 @@ void SimulationControl::OutputData(MpiCommunicator world, Cart cart, SolutionDat
 	G.writeVectorDouble ("TotalEnergy", TotalEnergy);
 	G.writeVectorDouble ("ElectricEnergy", ElectricEnergy);
 	G.writeVectorDouble ("MagneticEnergy", MagneticEnergy);
-	G.writeVectorDouble ("OhmHeat", OhmHeat);
+	if ( solution.SpongeLayer > 0 ) {
+		G.writeVectorDouble ("OhmHeat", OhmHeat);
+	}
 
 	auto G1 = F.createGroup("StartIndex");
 	G1.writeInt("startI", cart.StartPos[0]);
@@ -116,6 +121,7 @@ void SimulationControl::OutputData(MpiCommunicator world, Cart cart, SolutionDat
 	G3.writeInt("GridDimI", cart.GlobalDim[0]);
 	G3.writeInt("GridDimJ", cart.GlobalDim[1]);
 	G3.writeInt("GridDimK", cart.GlobalDim[2]);
+
 }
 
 void SimulationControl::UpdateTimeSeries(MpiCommunicator world, SolutionData solution)

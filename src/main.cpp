@@ -3,6 +3,7 @@
 #include "../Cow/src/MPI.hpp"
 
 #include <iostream>
+#include <fstream>
 #include <array>
 #include <cmath>
 #include <sstream>
@@ -10,7 +11,7 @@
 
 using namespace Cow;
 
-int main()
+int main(int argc, char* argv[])
 {
 	// initialize MPI
 	MpiSession Mpi;
@@ -18,7 +19,7 @@ int main()
 	auto rank = world.rank();
 
 	// Read Parameters
-	UserParameters userParameters;
+	UserParameters userParameters(argv[1]);
 
 	// initialize MPI
 	Cart mycart(userParameters);
@@ -57,6 +58,10 @@ int main()
 	double TotalEnergy = world.dsum(solution.TotalEnergy);
 	double OhmHeat = world.dsum(solution.TotalOhmHeat);
 
+	// write to file in case needed
+ 	std::ofstream out;
+ 	out.open("out.txt", std::ios::app);
+ 	out << userParameters.AmplitudeOfAlfvenPacket << ' ' << userParameters.ntheta << ' ' << TotalEnergy << ' ';
 
 	if(0==rank)
 	{
@@ -153,6 +158,9 @@ int main()
 		printf("Final Max EdotB %.12e \n", MaxEdotB);
 		printf("Final Max divB %.12e \n", MaxdivB);	
 	}
+
+	out << TotalEnergy << '\n';
+	out.close();
 
 
 

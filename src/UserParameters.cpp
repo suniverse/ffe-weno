@@ -8,8 +8,9 @@
 
 using namespace Cow;
 
-UserParameters::UserParameters()
+UserParameters::UserParameters(char* datafile)
 {
+	file = datafile;
 	ReadParameters();
 
 	ErrorCheck();
@@ -32,7 +33,7 @@ void UserParameters::ReadParameters()
 	int MAX_LINE_LENGTH = 128;
 	char line[MAX_LINE_LENGTH];
 
-	parameterfile = fopen("parameters.dat", "r");
+	parameterfile = fopen(file, "r");
 
 	// read data
 	while (fgets(line, MAX_LINE_LENGTH, parameterfile) != NULL) 
@@ -47,7 +48,7 @@ void UserParameters::ReadParameters()
 		ret += sscanf(line, "StopCycle = %d", &StopCycle);
 		ret += sscanf(line, "ReconstructionMethod = %d", &ReconstructionMethod);
 		ret += sscanf(line, "AmplitudeOfAlfvenPacket = %lf", &AmplitudeOfAlfvenPacket);
-
+		ret += sscanf(line, "Angle = %d", &ntheta);
 	}
 }
 

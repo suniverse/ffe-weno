@@ -1,14 +1,15 @@
-GridDimensions         = 64 1 64
+GridDimensions         = 64 64 64
 NumberOfGhostZones     = 3
 
 CFLSafetyNumber        = 0.5
-DataDumpInterval       = 1
+DataDumpInterval       = 0.1
 
-SpongeLayer            = 1
+SpongeLayer            = 0
 
-StopTime               = 5.
+StopTime               = 2.0
 #StopCycle             = 1
 
 ReconstructionMethod   = 2  // 1 for PLM, 2 for WENO 5
 
-AmplitudeOfAlfvenPacket = 0.4
+AmplitudeOfAlfvenPacket = 3
+Angle = 10

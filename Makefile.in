@@ -1,7 +1,7 @@
 # ----------------------------------------------------------
 # Compiler configuration
 # ----------------------------------------------------------
-CC = /opt/local/bin/mpicxx-openmpi-mp
+CC = mpicxx
 CXX = $(CC)
 CFLAGS = -std=c++11 -Wall -O3
 CLIBS = -lm

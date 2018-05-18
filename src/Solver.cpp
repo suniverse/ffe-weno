@@ -141,6 +141,7 @@ void Solver::AddJparallel(const Array& P)
 				//DeltaP(i,j,k,0) += 0.;
 				//DeltaP(i,j,k,1) += 0.;
 				//DeltaP(i,j,k,2) += 0.;
+
 				DeltaP(i,j,k,3) += - ((b+e) + EB / tau ) / B2 * P(i,j,k,0);
 				DeltaP(i,j,k,4) += - ((b+e) + EB / tau ) / B2 * P(i,j,k,1);
 				DeltaP(i,j,k,5) += - ((b+e) + EB / tau ) / B2 * P(i,j,k,2);
@@ -480,7 +481,8 @@ void Solver::ShrinkE( Array& P)
 				{
 					for (int d=0; d<3; ++d)
 					{
-						P(i,j,k,d+3) = sqrt(B2/E2)*P(i,j,k,d+3);				
+						P(i,j,k,d+3) = sqrt(B2/E2)*P(i,j,k,d+3);	
+						printf("Damp E field \n" );			
 					}
 				}
 			}

@@ -33,6 +33,7 @@ public:
 class UserParameters
 {
 public:
+	char* file;
 	int GridDimensions[3] = {1, 1, 1};        // Computation box dimension
 	int NumberOfGhostZones = 3;               // Number of ghost zones
 	int GridLength[3] = {1, 1, 1};            // Total size, computation domain + ghost zones
@@ -48,11 +49,12 @@ public:
 	int ReconstructionMethod = 1;             // Reconstruction method for Riemann solver
 
 	double AmplitudeOfAlfvenPacket = 0.1;     // Amplitude Of Alfven Packet, used for alfven wave collision
+	int ntheta = 0;
 
 	int SpongeLayer = 0;           // On/off of sponge layer for each direction
 
 	// Constructor
-	UserParameters();
+	UserParameters(char* file);
 	// Read parameters from file
 	void ReadParameters();
 	// Check for parameter errors
@@ -92,6 +94,7 @@ private:
 
 	//Amplitude Of Alfven Packet, used for alfven wave collision
 	double AmplitudeOfAlfvenPacket = 0.1;
+	int ntheta = 0;
 
 public:
 	// Constructor
@@ -128,8 +131,11 @@ public:
 	// Initialize Field Configurations
 	void InitialData();
 	void TestCases();
+	void AlfvenPacket1D();
 	void AlfvenPacket2D();
 	void AlfvenPacket3D();
+	void Random2D();
+	void Equilibrium();
 	void InitializeResistivity();
 
 };

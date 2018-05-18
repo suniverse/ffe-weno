@@ -1,6 +1,7 @@
 #include "Grid.hpp"
 #include <cmath>
 using namespace Cow;
+#include <cstdlib>
 
 
 SolutionData::SolutionData (UserParameters userParameters, Cart cart)
@@ -36,7 +37,7 @@ SolutionData::SolutionData (UserParameters userParameters, Cart cart)
 	SpongeLayer = userParameters.SpongeLayer;
 
 	AmplitudeOfAlfvenPacket = userParameters.AmplitudeOfAlfvenPacket;
-
+	ntheta = userParameters.ntheta;
 
 	// coordinates of each grid point
 	x = Array(Nint[0], Nint[1], Nint[2], 3);
@@ -75,8 +76,10 @@ SolutionData::SolutionData (UserParameters userParameters, Cart cart)
 	EField = PField[ERegion];
 
 	// Initialize Resistivity
-	Resistivity = Array(N[0], N[1], N[2]);
-	DampedEnergy = Array(N[0],N[1],N[2]);
+	if ( SpongeLayer > 0 ) {
+		Resistivity = Array(N[0], N[1], N[2]);
+		DampedEnergy = Array(N[0],N[1],N[2]);
+	}
 }
 
 Array& SolutionData::GetBField()
@@ -242,7 +245,11 @@ void SolutionData::InitialData()
 	// Initial Condition for test cases
 	//TestCases();
 
+	// 2D dipole field in x-y plane
+	//Dipole2D();
+
 	// Colliding Alfven packates
+	//Equilibrium();
 	AlfvenPacket3D();
 
 	// Combine E and B field to Primitive field P
@@ -392,6 +399,103 @@ void SolutionData::TestCases()
 	}// end loop over i
 }
 
+void SolutionData::AlfvenPacket1D()
+{
+	double pi = 3.1415927;
+	//double kvec[3] = {2*pi, 0, 2*pi};
+	double amp = AmplitudeOfAlfvenPacket;
+	double spd = 0.01;
+	double c1[3] = {0.5, 0.5, 0.25};
+	double c2[3] = {0.5, 0.5, 0.75};
+	double theta = pi/20.*ntheta;
+
+	for (int i = 0; i < Nint[0]; ++i)
+	{
+		for (int j = 0; j < Nint[1]; ++j)
+		{
+			for (int k = 0; k < Nint[2]; ++k)
+			{	
+				double E1 = exp(-(x(i,j,k,2) - c1[2]) * (x(i,j,k,2) - c1[2])/spd);
+				double E2 = exp(-(x(i,j,k,2) - c2[2]) * (x(i,j,k,2) - c2[2])/spd);
+
+				E1 *= amp;
+				E2 *= amp;
+				// Create A Gaussian packate for two colliding Alfven waves
+
+				// 3D case two cylinder
+				
+				
+				EField(i,j,k,0) = E1;
+                EField(i,j,k,0) += E2*cos(theta);
+                EField(i,j,k,1) += E2*sin(theta);
+
+				BField(i,j,k,1) = E1;
+                BField(i,j,k,1) += -E2*cos(theta);
+                BField(i,j,k,0) += E2*sin(theta);
+
+				BField(i,j,k,2) = 1;
+
+			} // end loop over k
+		}// end loop over j
+	}// end loop over i
+}
+
+void SolutionData::Random2D(){
+	// generate radom field in 2D x-z plane
+	//double pi = 3.1415927;
+	//double kvec[3] = {2*pi, 0, 2*pi};
+	int num = 100;
+	double amp[num];
+	double spd[num];
+	double rx[num];
+	double rz[num];
+	int sign[num];
+
+	for (int i=0; i<num; ++i)
+	{
+		amp[i] = (rand()/((double)RAND_MAX)-0.5)*0.8;
+		rx[i] = rand()/((double)RAND_MAX);
+		rz[i] = rand()/((double)RAND_MAX);
+		spd[i] = 0.01+rand()/((double)RAND_MAX)*0.04;
+		double p = rand()/((double)RAND_MAX);
+		if (p>= 0.5)
+			{ 
+				sign[i] = 1;
+			}else{
+				sign[i] = -1;
+			} 
+	}
+
+
+	for (int i = 0; i < Nint[0]; ++i)
+	{
+		for (int j = 0; j < Nint[1]; ++j)
+		{
+			for (int k = 0; k < Nint[2]; ++k)
+			{	
+				double E = 0;
+				double B = 0;
+
+				for (int p = 0; p<num; ++p){
+					double xmin = fmin(fabs(x(i,j,k,0) - rx[p]),fmin(fabs(x(i,j,k,0) - rx[p] + 1),fabs(x(i,j,k,0) - rx[p] - 1)));
+					double zmin = fmin(fabs(x(i,j,k,2) - rz[p]),fmin(fabs(x(i,j,k,2) - rz[p] + 1),fabs(x(i,j,k,2) - rz[p] - 1)));
+
+					E += amp[p] * exp( - xmin * xmin/spd[p] )
+								* exp( - zmin * zmin/spd[p] );
+					B += sign[p] * amp[p] * exp( - xmin * xmin/spd[p] )
+										  * exp( - zmin * zmin/spd[p] );
+				}
+				//printf("%f %f \n", E,B);
+
+				EField(i,j,k,0) = E;
+                BField(i,j,k,1) += B;
+				BField(i,j,k,2) = 1;
+
+			} // end loop over k
+		}// end loop over j
+	}// end loop over i
+}
+
 void SolutionData::AlfvenPacket2D()
 {
 	//double pi = 3.1415927;
@@ -408,30 +512,27 @@ void SolutionData::AlfvenPacket2D()
 		{
 			for (int k = 0; k < Nint[2]; ++k)
 			{	
-				double r1 = 0;
-				double r2 = 0;
+				double E1 = exp(-(x(i,j,k,2) - c1[2]) * (x(i,j,k,2) - c1[2])/spd)+(rand()/((double)RAND_MAX)-0.5)*0.1;
+							//20*(x(i,j,k,0) - c1[0])
+							//*exp(-(x(i,j,k,0) - c1[0]) * (x(i,j,k,0) - c1[0])/spd)
+							//*exp(-(x(i,j,k,2) - c1[2]) * (x(i,j,k,2) - c1[2])/spd);
+				double E2 = exp(-(x(i,j,k,2) - c2[2]) * (x(i,j,k,2) - c2[2])/spd)+(rand()/((double)RAND_MAX)-0.5)*0.1;
+							//20*(x(i,j,k,0) - c2[0])
+							//*exp(-(x(i,j,k,0) - c2[0]) * (x(i,j,k,0) - c2[0])/spd)
+							//*exp(-(x(i,j,k,2) - c2[2]) * (x(i,j,k,2) - c2[2])/spd);
 
-				for (int d=0; d<3; ++d)
-				{
-					if(d!=1){
-					r1 += (x(i,j,k,d) - c1[d]) * (x(i,j,k,d) - c1[d]);
-					}
-					if(d!=1){
-					r2 += (x(i,j,k,d) - c2[d]) * (x(i,j,k,d) - c2[d]);
-					}
-				}
-
+				E1 *= amp;
+				E2 *= amp;
 				// Create A Gaussian packate for two colliding Alfven waves
 
 				// 3D case two cylinder
-				double E1 = amp*exp(-r1/spd);
-				double E2 = amp*exp(-r2/spd);
 				
-				EField(i,j,k,0) = E1;
-                EField(i,j,k,0) += E2;
-				BField(i,j,k,1) = -E2;
-                BField(i,j,k,1) += E1;
-				BField(i,j,k,2) = 1;
+				
+				EField(i,j,k,0) = -E1;
+                EField(i,j,k,0) +=-E2;
+				BField(i,j,k,1) = E2;
+                BField(i,j,k,1) += -E1;
+				BField(i,j,k,2) = 1 ;
 
 			} // end loop over k
 		}// end loop over j
@@ -443,10 +544,10 @@ void SolutionData::AlfvenPacket3D()
 	//double pi = 3.1415927;
 	//double kvec[3] = {2*pi, 0, 2*pi};
 	double amp = AmplitudeOfAlfvenPacket;
-	double spd = 0.01;
+	double width = 0.2;
+	double spd = width * width;
 	double c1[3] = {0.5, 0.5, 0.25};
 	double c2[3] = {0.5, 0.5, 0.75};
-
 
 	for (int i = 0; i < Nint[0]; ++i)
 	{
@@ -466,8 +567,8 @@ void SolutionData::AlfvenPacket3D()
 				// Create A Gaussian packate for two colliding Alfven waves
 
 				// 3D case two cylinder
-				double g1 = amp*exp(-r1/spd)*10;
-				double g2 = amp*exp(-r2/spd)*10;
+				double g1 = amp*exp(-r1/spd)/width;
+				double g2 = amp*exp(-r2/spd)/width;
 				
 				BField(i,j,k,0) = -2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
                 BField(i,j,k,1) = 2*(x(i,j,k,0)-c1[0])*g1 - 2*(x(i,j,k,0)-c2[0])*g2;
@@ -475,11 +576,42 @@ void SolutionData::AlfvenPacket3D()
 
 				EField(i,j,k,0) = 2*(x(i,j,k,0)-c1[0])*g1 + 2*(x(i,j,k,0)-c2[0])*g2;
                 EField(i,j,k,1) = 2*(x(i,j,k,1)-c1[1])*g1 + 2*(x(i,j,k,1)-c2[1])*g2;
+			} // end loop over k
+		}// end loop over j
+	}// end loop over i
+}
+
+void SolutionData::Equilibrium()
+{
+	double pi = 3.1415926535897932384626;
+	double kvec = 2*pi;
+
+	for (int i = 0; i < Nint[0]; ++i)
+	{
+		for (int j = 0; j < Nint[1]; ++j)
+		{
+			for (int k = 0; k < Nint[2]; ++k)
+			{					
+				BField(i,j,k,2) = sqrt(2.) * sin(kvec*x(i,j,k,2)) * cos(kvec*x(i,j,k,0));
+				BField(i,j,k,0) = -sqrt(2.) * cos(kvec*x(i,j,k,2)) * sin(kvec*x(i,j,k,0));
+				BField(i,j,k,1) = -2. * sin(kvec*x(i,j,k,2)) * sin(kvec*x(i,j,k,0)) + sin(5*kvec*x(i,j,k,2))*0.5;
+
+				//BField(i,j,k,1) +=  exp(-( x(i,j,k,2) - 0.25 ) * ( x(i,j,k,2) - 0.25 ) / 0.01)
+				//				  * exp(-( x(i,j,k,0) - 0.5 ) * ( x(i,j,k,0) - 0.5 ) / 0.05);
+				//BField(i,j,k,1) +=  exp(-( x(i,j,k,2) - 0.75 ) * ( x(i,j,k,2) - 0.75 ) / 0.01)
+				//				  * exp(-( x(i,j,k,0) - 0.5 ) * ( x(i,j,k,0) - 0.5 ) / 0.05);
+
+				//EField(i,j,k,0) +=  0.1*exp(-( x(i,j,k,2) - 0.25 ) * ( x(i,j,k,2) - 0.25 ) / 0.01)
+				//				  * exp(-( x(i,j,k,0) - 0.5 ) * ( x(i,j,k,0) - 0.5 ) / 0.05);
+				//EField(i,j,k,0) +=  exp(-( x(i,j,k,2) - 0.75 ) * ( x(i,j,k,2) - 0.75 ) / 0.01)
+				//				  * exp(-( x(i,j,k,0) - 0.5 ) * ( x(i,j,k,0) - 0.5 ) / 0.05);
+
 
 			} // end loop over k
 		}// end loop over j
 	}// end loop over i
 }
+
 
 void SolutionData::InitializeResistivity()
 {
