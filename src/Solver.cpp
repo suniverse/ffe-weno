@@ -479,10 +479,11 @@ void Solver::ShrinkE( Array& P)
 
 				if (E2 > B2)
 				{
+					printf("Damp E field \n" );			
+					
 					for (int d=0; d<3; ++d)
 					{
 						P(i,j,k,d+3) = sqrt(B2/E2)*P(i,j,k,d+3);	
-						printf("Damp E field \n" );			
 					}
 				}
 			}
